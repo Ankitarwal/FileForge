@@ -67,19 +67,25 @@ function FileForgeContent() {
       const hash = window.location.hash.replace('#', '');
       const pathname = window.location.pathname;
       
-      // 1. Check for Public Share Link (/share/:token or #share/:token)
+      // 1. Check for Public Share Link (/share/:token or #share/:token or ?share=:token)
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryToken = searchParams.get('share');
+
       if (pathname.startsWith('/share/')) {
-        const token = pathname.replace('/share/', '').split('/')[0].split('?')[0];
+        const token = pathname.replace('/share/', '').split('/')[0].split('?')[0].trim();
         if (token) {
           setPublicShareToken(token);
           return;
         }
       } else if (hash.startsWith('share/')) {
-        const token = hash.replace('share/', '').split('/')[0].split('?')[0];
+        const token = hash.replace('share/', '').split('/')[0].split('?')[0].trim();
         if (token) {
           setPublicShareToken(token);
           return;
         }
+      } else if (queryToken) {
+        setPublicShareToken(queryToken.trim());
+        return;
       } else {
         setPublicShareToken(null);
       }
