@@ -63,11 +63,60 @@ export function getImageDimensions(file: File | string): Promise<{ width: number
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      if (typeof img.decode === 'function') {
+        img.decode().then(() => resolve(img)).catch(() => resolve(img));
+      } else {
+        resolve(img);
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to decode image file. Format may be unsupported.'));
     img.src = src;
   });
+}
+
+export async function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
+  const canvas = document.createElement('canvas');
+  // Try high-performance ImageBitmap first
+  if (typeof window.createImageBitmap === 'function') {
+    try {
+      const bitmap = await window.createImageBitmap(file);
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return canvas;
+    } catch {
+      // Fallback to Image element
+    }
+  }
+
+  // Fallback via Object URL
+  let objectUrl = '';
+  try {
+    objectUrl = URL.createObjectURL(file);
+    const img = await loadImage(objectUrl);
+    canvas.width = img.naturalWidth || img.width || 800;
+    canvas.height = img.naturalHeight || img.height || 600;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    return canvas;
+  } catch {
+    // Fallback via Data URL
+    const dataUrl = await readFileAsDataURL(file);
+    const img = await loadImage(dataUrl);
+    canvas.width = img.naturalWidth || img.width || 800;
+    canvas.height = img.naturalHeight || img.height || 600;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    return canvas;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 
 export function triggerConfetti() {

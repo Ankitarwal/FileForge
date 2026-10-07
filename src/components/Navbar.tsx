@@ -19,7 +19,6 @@ interface NavbarProps {
   onNavigateHome: () => void;
   onSelectCategory: (cat: 'all' | 'image' | 'pdf' | 'convert' | 'compress') => void;
   onSelectTool: (toolId: string) => void;
-  onOpenPricing: () => void;
   onOpenAbout: () => void;
   onOpenAuth: (mode: 'login' | 'signup') => void;
   onOpenDashboard: () => void;
@@ -31,7 +30,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome,
   onSelectCategory,
   onSelectTool,
-  onOpenPricing,
   onOpenAbout,
   onOpenAuth,
   onOpenDashboard,
@@ -166,14 +164,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             <button 
-              onClick={onOpenPricing}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-100/80 transition-colors flex items-center space-x-1"
-            >
-              <Crown className="w-3.5 h-3.5 text-amber-500" />
-              <span>Pricing</span>
-            </button>
-
-            <button 
               onClick={onOpenAbout}
               className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-100/80 transition-colors"
             >
@@ -276,13 +266,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="border-t border-slate-100 pt-3 space-y-1">
-            <button 
-              onClick={() => { onOpenPricing(); setMobileMenuOpen(false); }}
-              className="w-full text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-lg flex items-center justify-between"
-            >
-              <span>Pricing Plans</span>
-              <Crown className="w-4 h-4 text-amber-500" />
-            </button>
             <button 
               onClick={() => { onOpenAbout(); setMobileMenuOpen(false); }}
               className="w-full text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-lg"

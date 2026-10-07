@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import JSZip from 'jszip';
-import { readFileAsArrayBuffer } from '../utils/fileUtils';
+import { readFileAsArrayBuffer, fileToCanvas } from '../utils/fileUtils';
 
 export interface WatermarkPdfOptions {
   text: string;
@@ -52,16 +52,53 @@ export class PdfProcessor {
   }
 
   /**
-   * Merge multiple PDF files into one
+   * Merge multiple PDF files (and images) into one unified document
    */
   static async mergePdfs(files: File[]): Promise<Blob> {
     const mergedPdf = await PDFDocument.create();
 
-    for (const file of files) {
-      const buffer = await readFileAsArrayBuffer(file);
-      const pdf = await PDFDocument.load(buffer);
-      const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-      copiedPages.forEach((page) => mergedPdf.addPage(page));
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        if (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|avif|bmp|gif)$/i.test(file.name)) {
+          // Convert image to a PDF page and append
+          const canvas = await fileToCanvas(file);
+          const jpegBlob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), 'image/jpeg', 0.94));
+          const jpegBytes = await jpegBlob.arrayBuffer();
+          const pdfImage = await mergedPdf.embedJpg(jpegBytes);
+
+          // Standard A4 or fit dimension
+          const pWidth = 595.28;
+          const pHeight = 841.89;
+          const page = mergedPdf.addPage([pWidth, pHeight]);
+
+          const margin = 28.35; // 10mm
+          const availWidth = pWidth - margin * 2;
+          const availHeight = pHeight - margin * 2;
+          const scale = Math.min(availWidth / pdfImage.width, availHeight / pdfImage.height, 1);
+
+          const drawWidth = pdfImage.width * scale;
+          const drawHeight = pdfImage.height * scale;
+          page.drawImage(pdfImage, {
+            x: margin + (availWidth - drawWidth) / 2,
+            y: margin + (availHeight - drawHeight) / 2,
+            width: drawWidth,
+            height: drawHeight,
+          });
+        } else {
+          // PDF document
+          const buffer = await readFileAsArrayBuffer(file);
+          const pdf = await PDFDocument.load(buffer, { ignoreEncryption: true });
+          const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        }
+      } catch (err) {
+        console.warn(`Could not merge file ${file.name}:`, err);
+      }
+    }
+
+    if (mergedPdf.getPageCount() === 0) {
+      mergedPdf.addPage([595.28, 841.89]);
     }
 
     const mergedBytes = await mergedPdf.save();
@@ -77,7 +114,7 @@ export class PdfProcessor {
     rangeString?: string
   ): Promise<{ blob: Blob; isZip: boolean; count: number }> {
     const buffer = await readFileAsArrayBuffer(file);
-    const srcDoc = await PDFDocument.load(buffer);
+    const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const totalPages = srcDoc.getPageCount();
 
     if (mode === 'all-pages') {
@@ -160,7 +197,7 @@ export class PdfProcessor {
     pageConfigs: { pageIndex: number; rotation: number; deleted: boolean }[]
   ): Promise<Blob> {
     const buffer = await readFileAsArrayBuffer(file);
-    const srcDoc = await PDFDocument.load(buffer);
+    const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const newDoc = await PDFDocument.create();
 
     for (const config of pageConfigs) {
@@ -186,7 +223,7 @@ export class PdfProcessor {
     target: 'all' | 'odd' | 'even' = 'all'
   ): Promise<Blob> {
     const buffer = await readFileAsArrayBuffer(file);
-    const pdfDoc = await PDFDocument.load(buffer);
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const pages = pdfDoc.getPages();
 
     pages.forEach((page, index) => {
@@ -210,7 +247,7 @@ export class PdfProcessor {
    */
   static async addWatermark(file: File, options: WatermarkPdfOptions): Promise<Blob> {
     const buffer = await readFileAsArrayBuffer(file);
-    const pdfDoc = await PDFDocument.load(buffer);
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const pages = pdfDoc.getPages();
 
@@ -254,7 +291,7 @@ export class PdfProcessor {
    */
   static async addPageNumbers(file: File, options: PageNumberOptions): Promise<Blob> {
     const buffer = await readFileAsArrayBuffer(file);
-    const pdfDoc = await PDFDocument.load(buffer);
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const pages = pdfDoc.getPages();
     const total = pages.length;
@@ -304,7 +341,7 @@ export class PdfProcessor {
    */
   static async addHeaderFooter(file: File, options: HeaderFooterOptions): Promise<Blob> {
     const buffer = await readFileAsArrayBuffer(file);
-    const pdfDoc = await PDFDocument.load(buffer);
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const pages = pdfDoc.getPages();
 
@@ -347,7 +384,7 @@ export class PdfProcessor {
    */
   static async updateMetadata(file: File, meta: PdfMetadata): Promise<Blob> {
     const buffer = await readFileAsArrayBuffer(file);
-    const pdfDoc = await PDFDocument.load(buffer);
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
 
     if (meta.title !== undefined) pdfDoc.setTitle(meta.title);
     if (meta.author !== undefined) pdfDoc.setAuthor(meta.author);

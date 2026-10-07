@@ -4,14 +4,12 @@ import { ShieldCheck, Heart } from 'lucide-react';
 interface FooterProps {
   onSelectCategory: (cat: 'all' | 'image' | 'pdf' | 'convert' | 'compress') => void;
   onSelectTool: (toolId: string) => void;
-  onOpenPricing: () => void;
   onOpenAbout: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onSelectCategory,
   onSelectTool,
-  onOpenPricing,
   onOpenAbout,
 }) => {
   return (
@@ -87,11 +85,6 @@ export const Footer: React.FC<FooterProps> = ({
               <li>
                 <button onClick={onOpenAbout} className="hover:text-white transition-colors">
                   About FileForge
-                </button>
-              </li>
-              <li>
-                <button onClick={onOpenPricing} className="hover:text-white transition-colors">
-                  Pricing Plans
                 </button>
               </li>
               <li>

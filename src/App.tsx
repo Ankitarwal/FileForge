@@ -7,7 +7,6 @@ import { ToolGrid } from './components/ToolGrid';
 import { WhyChooseUs } from './components/WhyChooseUs';
 import { HowItWorks } from './components/HowItWorks';
 import { PrivacySecurity } from './components/PrivacySecurity';
-import { PricingSection } from './components/PricingSection';
 import { FAQSection } from './components/FAQSection';
 import { CtaSection } from './components/CtaSection';
 import { Footer } from './components/Footer';
@@ -90,11 +89,6 @@ function FileForgeContent() {
       } else if (hash === 'pdf-tools') {
         setSelectedCategory('pdf');
         setActiveToolId(null);
-      } else if (hash === 'pricing') {
-        setActiveToolId(null);
-        setTimeout(() => {
-          document.getElementById('pricing-section')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
       } else if (!hash) {
         setActiveToolId(null);
       }
@@ -211,12 +205,6 @@ function FileForgeContent() {
         onNavigateHome={handleNavigateHome}
         onSelectCategory={(c) => handleSelectCategory(c as any)}
         onSelectTool={handleOpenTool}
-        onOpenPricing={() => {
-          setActiveToolId(null);
-          setTimeout(() => {
-            document.getElementById('pricing-section')?.scrollIntoView({ behavior: 'smooth' });
-          }, 50);
-        }}
         onOpenAbout={() => {
           setActiveToolId(null);
           setTimeout(() => {
@@ -240,7 +228,7 @@ function FileForgeContent() {
           />
         ) : (
           /* HOMEPAGE LAYOUT:
-             Hero -> Popular Tools -> Image Tools -> PDF Tools -> Why FileForge -> How It Works -> Privacy & Security -> Pricing -> FAQ -> CTA -> Footer
+             Hero -> Popular Tools -> Image Tools -> PDF Tools -> Why FileForge -> How It Works -> Privacy & Security -> FAQ -> CTA -> Footer
           */
           <div>
             {/* Hero Section */}
@@ -269,9 +257,6 @@ function FileForgeContent() {
             {/* Privacy & Security ("Your Files Stay Private") */}
             <PrivacySecurity />
 
-            {/* Pricing Section (Free vs Pro) */}
-            <PricingSection onSelectPlan={(plan) => setAuthModalMode('signup')} />
-
             {/* FAQ Accordion Section */}
             <FAQSection />
 
@@ -285,12 +270,6 @@ function FileForgeContent() {
       <Footer
         onSelectCategory={(c) => handleSelectCategory(c as any)}
         onSelectTool={handleOpenTool}
-        onOpenPricing={() => {
-          setActiveToolId(null);
-          setTimeout(() => {
-            document.getElementById('pricing-section')?.scrollIntoView({ behavior: 'smooth' });
-          }, 50);
-        }}
         onOpenAbout={() => {
           setActiveToolId(null);
           setTimeout(() => {

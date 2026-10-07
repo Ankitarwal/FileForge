@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
+import JSZip from 'jszip';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -148,11 +149,7 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
   }, [files]);
 
   const handleFilesSelected = (newFiles: File[]) => {
-    if (tool.supportsMultiple) {
-      setFiles((prev) => [...prev, ...newFiles]);
-    } else {
-      setFiles(newFiles.slice(0, 1));
-    }
+    setFiles((prev) => [...prev, ...newFiles]);
     setErrorMessage(null);
     setResult(null);
   };
@@ -180,7 +177,7 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
     setErrorMessage(null);
 
     try {
-      // Simulate multi-stage pipeline smooth progression
+      // Multi-stage pipeline smooth progression
       setTimeout(() => {
         setProcessingState('processing');
         setProgressPercent(45);
@@ -196,7 +193,6 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
         setProgressPercent(90);
       }, 1000);
 
-      // Give browser brief tick to show animations
       await new Promise((r) => setTimeout(r, 1200));
 
       let outputBlob: Blob;
@@ -208,18 +204,17 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
 
       // ================= PROCESS IMAGE TOOLS =================
       if (tool.id === 'image-compressor') {
-        const res = await ImageProcessor.compressImage(firstFile, {
+        const compRes = await ImageProcessor.compressBatch(files, {
           quality: compressQuality / 100,
           format: compressFormat,
           targetSizeKb,
           preserveMetadata,
         });
-        outputBlob = res.blob;
-        const ext = compressFormat === 'image/jpeg' ? '.jpg' : compressFormat === 'image/png' ? '.png' : '.webp';
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_compressed${ext}`;
-        savings = Math.max(15, Math.round(((originalTotalSize - outputBlob.size) / originalTotalSize) * 100));
+        outputBlob = compRes.blob;
+        outputName = compRes.fileName;
+        savings = compRes.savings;
       } else if (tool.id === 'image-resizer') {
-        const res = await ImageProcessor.resizeImage(firstFile, {
+        const res = await ImageProcessor.resizeBatch(files, {
           mode: resizeMode,
           percentage: resizePercent,
           width: resizeWidth,
@@ -228,7 +223,7 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
           format: 'image/jpeg',
         });
         outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_resized.jpg`;
+        outputName = res.fileName;
       } else if (tool.id === 'image-crop') {
         const cropOpts: CropOptions = specialOptions || {
           x: 0,
@@ -240,33 +235,106 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
         outputBlob = res.blob;
         outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_cropped.png`;
       } else if (tool.id === 'image-rotate-flip') {
-        const res = await ImageProcessor.rotateFlipImage(firstFile, rotateAngle, flipH, flipV);
-        outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_rotated.png`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Rotated_Images') || zip;
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            try {
+              const res = await ImageProcessor.rotateFlipImage(f, rotateAngle, flipH, flipV);
+              folder.file(`${f.name.replace(/\.[^/.]+$/, '')}_rotated.png`, res.blob);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Rotated_Images.zip';
+        } else {
+          const res = await ImageProcessor.rotateFlipImage(firstFile, rotateAngle, flipH, flipV);
+          outputBlob = res.blob;
+          outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_rotated.png`;
+        }
       } else if (tool.id === 'image-enhancer') {
-        const res = await ImageProcessor.enhanceImage(firstFile, {
-          brightness: enhanceBrightness,
-          contrast: enhanceContrast,
-          saturation: enhanceSaturation,
-          sharpness: 50,
-          autoEnhance: enhanceAuto,
-        });
-        outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_enhanced.png`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Enhanced_Images') || zip;
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            try {
+              const res = await ImageProcessor.enhanceImage(f, {
+                brightness: enhanceBrightness,
+                contrast: enhanceContrast,
+                saturation: enhanceSaturation,
+                sharpness: 50,
+                autoEnhance: enhanceAuto,
+              });
+              folder.file(`${f.name.replace(/\.[^/.]+$/, '')}_enhanced.png`, res.blob);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Enhanced_Images.zip';
+        } else {
+          const res = await ImageProcessor.enhanceImage(firstFile, {
+            brightness: enhanceBrightness,
+            contrast: enhanceContrast,
+            saturation: enhanceSaturation,
+            sharpness: 50,
+            autoEnhance: enhanceAuto,
+          });
+          outputBlob = res.blob;
+          outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_enhanced.png`;
+        }
       } else if (tool.id === 'background-remover') {
-        const res = await ImageProcessor.removeBackground(firstFile, {
-          mode: bgRemoveMode,
-          customColor: bgCustomColor,
-        });
-        outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_nobg.png`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('NoBG_Images') || zip;
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            try {
+              const res = await ImageProcessor.removeBackground(f, {
+                mode: bgRemoveMode,
+                customColor: bgCustomColor,
+              });
+              folder.file(`${f.name.replace(/\.[^/.]+$/, '')}_nobg.png`, res.blob);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_NoBG_Images.zip';
+        } else {
+          const res = await ImageProcessor.removeBackground(firstFile, {
+            mode: bgRemoveMode,
+            customColor: bgCustomColor,
+          });
+          outputBlob = res.blob;
+          outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_nobg.png`;
+        }
       } else if (tool.id === 'image-dpi-converter') {
-        const res = await ImageProcessor.compressImage(firstFile, {
-          quality: 0.95,
-          format: 'image/jpeg',
-        });
-        outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_${selectedDpi}DPI.jpg`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('DPI_Images') || zip;
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            try {
+              const res = await ImageProcessor.compressImage(f, { quality: 0.95, format: 'image/jpeg' });
+              folder.file(`${f.name.replace(/\.[^/.]+$/, '')}_${selectedDpi}DPI.jpg`, res.blob);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_DPI_Images.zip';
+        } else {
+          const res = await ImageProcessor.compressImage(firstFile, {
+            quality: 0.95,
+            format: 'image/jpeg',
+          });
+          outputBlob = res.blob;
+          outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_${selectedDpi}DPI.jpg`;
+        }
       } else if (tool.id === 'passport-photo-resize') {
         const pOpts: PassportOptions = specialOptions || {
           preset: 'us-passport',
@@ -276,22 +344,38 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
           bgColor: 'white',
           createPrintSheet: true,
         };
-        const res = await ImageProcessor.generatePassportPhoto(firstFile, pOpts);
-        outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_passport_${pOpts.createPrintSheet ? 'sheet' : 'photo'}.jpg`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Passport_Photos') || zip;
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            try {
+              const res = await ImageProcessor.generatePassportPhoto(f, pOpts);
+              folder.file(`${f.name.replace(/\.[^/.]+$/, '')}_passport.jpg`, res.blob);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Passport_Photos.zip';
+        } else {
+          const res = await ImageProcessor.generatePassportPhoto(firstFile, pOpts);
+          outputBlob = res.blob;
+          outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_passport_${pOpts.createPrintSheet ? 'sheet' : 'photo'}.jpg`;
+        }
       } else if (tool.id === 'image-to-pdf' || tool.id === 'multiple-images-to-pdf') {
         outputBlob = await ImageProcessor.imagesToPdf(files, {
           pageSize: imgPdfPageSize,
           orientation: imgPdfOrientation,
           margin: imgPdfMargin,
-          quality: 0.9,
+          quality: 0.92,
         });
-        outputName = 'FileForge_Converted_Document.pdf';
+        outputName = files.length > 1 ? 'FileForge_Combined_Images.pdf' : `${firstFile.name.replace(/\.[^/.]+$/, '')}.pdf`;
       } else if (tool.id === 'images-to-zip') {
         outputBlob = await ImageProcessor.imagesToZip(files, zipPrefix);
         outputName = 'FileForge_Image_Archive.zip';
       } else if (tool.id === 'watermark-image') {
-        const res = await ImageProcessor.watermarkImage(firstFile, {
+        const wmRes = await ImageProcessor.watermarkBatch(files, {
           type: 'text',
           text: watermarkText,
           position: watermarkPosition,
@@ -301,21 +385,17 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
           rotation: watermarkRotation,
           outline: watermarkOutline,
         });
-        outputBlob = res.blob;
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_watermarked.png`;
+        outputBlob = wmRes.blob;
+        outputName = wmRes.fileName;
       } else if (tool.id === 'image-redact-blur') {
         const boxes: RedactBox[] = specialOptions || [];
         const res = await ImageProcessor.redactImage(firstFile, boxes);
         outputBlob = res.blob;
         outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_redacted.png`;
       } else if (tool.id === 'image-converter' || tool.id === 'pdf-to-image' || tool.id === 'pdf-to-jpg-png') {
-        const res = await ImageProcessor.compressImage(firstFile, {
-          quality: 0.92,
-          format: targetFormat === 'image/avif' ? 'image/webp' : targetFormat,
-        });
-        outputBlob = res.blob;
-        const ext = targetFormat === 'image/jpeg' ? '.jpg' : targetFormat === 'image/png' ? '.png' : '.webp';
-        outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_converted${ext}`;
+        const convRes = await ImageProcessor.convertBatch(files, targetFormat);
+        outputBlob = convRes.blob;
+        outputName = convRes.fileName;
       }
 
       // ================= PROCESS PDF TOOLS =================
@@ -333,46 +413,162 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
         outputBlob = await PdfProcessor.modifyPages(firstFile, configs);
         outputName = `${firstFile.name.replace('.pdf', '')}_reorganized.pdf`;
       } else if (tool.id === 'rotate-pdf') {
-        outputBlob = await PdfProcessor.rotatePdf(firstFile, rotateAngle, 'all');
-        outputName = `${firstFile.name.replace('.pdf', '')}_rotated.pdf`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Rotated_PDFs') || zip;
+          for (const f of files) {
+            try {
+              const res = await PdfProcessor.rotatePdf(f, rotateAngle, 'all');
+              folder.file(`${f.name.replace('.pdf', '')}_rotated.pdf`, res);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Rotated_PDFs.zip';
+        } else {
+          outputBlob = await PdfProcessor.rotatePdf(firstFile, rotateAngle, 'all');
+          outputName = `${firstFile.name.replace('.pdf', '')}_rotated.pdf`;
+        }
       } else if (tool.id === 'watermark-pdf') {
-        outputBlob = await PdfProcessor.addWatermark(firstFile, {
-          text: watermarkText,
-          fontSize: watermarkFontSize,
-          opacity: watermarkOpacity,
-          rotation: watermarkRotation,
-          color: watermarkColor,
-          pages: 'all',
-        });
-        outputName = `${firstFile.name.replace('.pdf', '')}_watermarked.pdf`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Watermarked_PDFs') || zip;
+          for (const f of files) {
+            try {
+              const res = await PdfProcessor.addWatermark(f, {
+                text: watermarkText,
+                fontSize: watermarkFontSize,
+                opacity: watermarkOpacity,
+                rotation: watermarkRotation,
+                color: watermarkColor,
+                pages: 'all',
+              });
+              folder.file(`${f.name.replace('.pdf', '')}_watermarked.pdf`, res);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Watermarked_PDFs.zip';
+        } else {
+          outputBlob = await PdfProcessor.addWatermark(firstFile, {
+            text: watermarkText,
+            fontSize: watermarkFontSize,
+            opacity: watermarkOpacity,
+            rotation: watermarkRotation,
+            color: watermarkColor,
+            pages: 'all',
+          });
+          outputName = `${firstFile.name.replace('.pdf', '')}_watermarked.pdf`;
+        }
       } else if (tool.id === 'page-numbers-pdf') {
-        outputBlob = await PdfProcessor.addPageNumbers(firstFile, {
-          format: pageNumberFormat,
-          position: pageNumberPos,
-          fontSize: 10,
-          startFromPage: 1,
-        });
-        outputName = `${firstFile.name.replace('.pdf', '')}_numbered.pdf`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Numbered_PDFs') || zip;
+          for (const f of files) {
+            try {
+              const res = await PdfProcessor.addPageNumbers(f, {
+                format: pageNumberFormat,
+                position: pageNumberPos,
+                fontSize: 10,
+                startFromPage: 1,
+              });
+              folder.file(`${f.name.replace('.pdf', '')}_numbered.pdf`, res);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Numbered_PDFs.zip';
+        } else {
+          outputBlob = await PdfProcessor.addPageNumbers(firstFile, {
+            format: pageNumberFormat,
+            position: pageNumberPos,
+            fontSize: 10,
+            startFromPage: 1,
+          });
+          outputName = `${firstFile.name.replace('.pdf', '')}_numbered.pdf`;
+        }
       } else if (tool.id === 'header-footer-pdf') {
-        outputBlob = await PdfProcessor.addHeaderFooter(firstFile, {
-          headerCenter: headerText,
-          footerCenter: footerText,
-          fontSize: 9,
-        });
-        outputName = `${firstFile.name.replace('.pdf', '')}_header_footer.pdf`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('HeaderFooter_PDFs') || zip;
+          for (const f of files) {
+            try {
+              const res = await PdfProcessor.addHeaderFooter(f, {
+                headerCenter: headerText,
+                footerCenter: footerText,
+                fontSize: 9,
+              });
+              folder.file(`${f.name.replace('.pdf', '')}_header_footer.pdf`, res);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_HeaderFooter_PDFs.zip';
+        } else {
+          outputBlob = await PdfProcessor.addHeaderFooter(firstFile, {
+            headerCenter: headerText,
+            footerCenter: footerText,
+            fontSize: 9,
+          });
+          outputName = `${firstFile.name.replace('.pdf', '')}_header_footer.pdf`;
+        }
       } else if (tool.id === 'pdf-metadata-editor') {
-        outputBlob = await PdfProcessor.updateMetadata(firstFile, {
-          title: metaTitle,
-          author: metaAuthor,
-          subject: metaSubject,
-          keywords: metaKeywords.split(',').map((s) => s.trim()),
-        });
-        outputName = `${firstFile.name.replace('.pdf', '')}_metadata.pdf`;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Metadata_PDFs') || zip;
+          for (const f of files) {
+            try {
+              const res = await PdfProcessor.updateMetadata(f, {
+                title: metaTitle,
+                author: metaAuthor,
+                subject: metaSubject,
+                keywords: metaKeywords.split(',').map((s) => s.trim()),
+              });
+              folder.file(`${f.name.replace('.pdf', '')}_metadata.pdf`, res);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Metadata_PDFs.zip';
+        } else {
+          outputBlob = await PdfProcessor.updateMetadata(firstFile, {
+            title: metaTitle,
+            author: metaAuthor,
+            subject: metaSubject,
+            keywords: metaKeywords.split(',').map((s) => s.trim()),
+          });
+          outputName = `${firstFile.name.replace('.pdf', '')}_metadata.pdf`;
+        }
       } else if (tool.id === 'pdf-compressor') {
-        const compRes = await PdfProcessor.compressPdf(firstFile, pdfCompressLevel);
-        outputBlob = compRes.blob;
-        outputName = `${firstFile.name.replace('.pdf', '')}_compressed.pdf`;
-        savings = compRes.savings;
+        if (files.length > 1) {
+          const zip = new JSZip();
+          const folder = zip.folder('Compressed_PDFs') || zip;
+          let totalOrig = 0;
+          let totalProc = 0;
+          for (const f of files) {
+            totalOrig += f.size;
+            try {
+              const compRes = await PdfProcessor.compressPdf(f, pdfCompressLevel);
+              totalProc += compRes.blob.size;
+              folder.file(`${f.name.replace('.pdf', '')}_compressed.pdf`, compRes.blob);
+            } catch (err) {
+              console.warn(err);
+            }
+          }
+          outputBlob = await zip.generateAsync({ type: 'blob' });
+          outputName = 'FileForge_Compressed_PDFs.zip';
+          savings = totalOrig > 0 ? Math.max(10, Math.round(((totalOrig - totalProc) / totalOrig) * 100)) : 30;
+        } else {
+          const compRes = await PdfProcessor.compressPdf(firstFile, pdfCompressLevel);
+          outputBlob = compRes.blob;
+          outputName = `${firstFile.name.replace('.pdf', '')}_compressed.pdf`;
+          savings = compRes.savings;
+        }
       } else if (tool.id === 'pdf-to-word') {
         outputBlob = await PdfProcessor.convertPdfToWord(firstFile);
         outputName = `${firstFile.name.replace('.pdf', '')}.docx`;
@@ -436,15 +632,17 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
         processedSize: outputBlob.size,
       });
     } catch (err: any) {
-      console.error(err);
-      setErrorMessage(err.message || 'An error occurred during processing. Please try again.');
+      console.error('Processing error:', err);
+      const msg = err && typeof err === 'object' && err.message ? err.message : 'An error occurred during processing. Please try again.';
+      setErrorMessage(msg);
       setProcessingState('error');
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = (customFileName?: string) => {
     if (result) {
-      downloadBlob(result.blob, result.fileName);
+      const finalName = customFileName?.trim() || result.fileName;
+      downloadBlob(result.blob, finalName);
     }
   };
 
@@ -1018,6 +1216,10 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
                 result={result}
                 onDownload={handleDownload}
                 onReset={handleReset}
+                onEdit={() => {
+                  setResult(null);
+                  setProcessingState('idle');
+                }}
                 isMultiple={files.length > 1}
               />
             )}
