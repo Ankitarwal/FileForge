@@ -16,12 +16,11 @@ CREATE INDEX IF NOT EXISTS idx_file_shares_storage_path
   ON public.file_shares (storage_path);
 
 
--- 2. Enable Row Level Security on file_shares
+-- 2. Enable Row Level Security on public.file_shares
 ALTER TABLE public.file_shares ENABLE ROW LEVEL SECURITY;
 
 
 -- 3. Owner RLS Policies for public.file_shares
--- Clean up any existing policies
 DROP POLICY IF EXISTS "Authenticated users can insert own file shares" ON public.file_shares;
 DROP POLICY IF EXISTS "Authenticated users can select own file shares" ON public.file_shares;
 DROP POLICY IF EXISTS "Authenticated users can update own file shares" ON public.file_shares;
@@ -38,7 +37,7 @@ WITH CHECK (
   AND auth.uid() = user_id
 );
 
--- Policy 2: Authenticated users can view only their own records in their dashboard/studio
+-- Policy 2: Authenticated users can select only their own file shares
 CREATE POLICY "Authenticated users can select own file shares"
 ON public.file_shares
 FOR SELECT
@@ -48,7 +47,7 @@ USING (
   AND auth.uid() = user_id
 );
 
--- Policy 3: Authenticated users can update only their own records (e.g. revoke)
+-- Policy 3: Authenticated users can update only their own file shares
 CREATE POLICY "Authenticated users can update own file shares"
 ON public.file_shares
 FOR UPDATE
@@ -62,7 +61,7 @@ WITH CHECK (
   AND auth.uid() = user_id
 );
 
--- Policy 4: Authenticated users can delete only their own records
+-- Policy 4: Authenticated users can delete only their own file shares
 CREATE POLICY "Authenticated users can delete own file shares"
 ON public.file_shares
 FOR DELETE
@@ -73,8 +72,13 @@ USING (
 );
 
 
--- 4. Secure Public Retrieval Function (SECURITY DEFINER)
--- Bypasses table-level RLS safely to return ONLY metadata for a specific valid token
+-- 4. Drop Existing Functions to allow updated return types
+DROP FUNCTION IF EXISTS public.get_share_by_token(text);
+DROP FUNCTION IF EXISTS public.increment_share_download_count(text);
+DROP FUNCTION IF EXISTS public.can_access_shared_file(text);
+
+
+-- 5. Public Share Lookup Function (SECURITY DEFINER)
 CREATE OR REPLACE FUNCTION public.get_share_by_token(p_token text)
 RETURNS TABLE (
   id uuid,
@@ -117,8 +121,7 @@ END;
 $$;
 
 
--- 5. Atomic Download Counter Function (SECURITY DEFINER)
--- Safely increments download count and validates limits atomically under high concurrency
+-- 6. Atomic Download Counter Function (SECURITY DEFINER)
 CREATE OR REPLACE FUNCTION public.increment_share_download_count(p_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -127,9 +130,7 @@ SET search_path = ''
 AS $$
 DECLARE
   v_share public.file_shares%ROWTYPE;
-  v_new_count integer;
 BEGIN
-  -- Lock row and update if all validity criteria are satisfied
   UPDATE public.file_shares s
   SET download_count = s.download_count + 1
   WHERE s.share_token = p_token
@@ -155,9 +156,7 @@ END;
 $$;
 
 
--- 6. Storage Access Helper Function (SECURITY DEFINER)
--- Allows the Storage SELECT policy to verify if an object belongs to an active, valid share
--- without requiring anon users to have broad SELECT access on public.file_shares
+-- 7. Storage Security Helper Function (SECURITY DEFINER)
 CREATE OR REPLACE FUNCTION public.can_access_shared_file(object_path text)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -177,7 +176,7 @@ END;
 $$;
 
 
--- 7. Grant & Revoke Execution Permissions
+-- 8. Grant & Revoke Execution Permissions
 REVOKE ALL ON FUNCTION public.get_share_by_token(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_share_by_token(text) TO anon, authenticated, service_role;
 
@@ -188,7 +187,7 @@ REVOKE ALL ON FUNCTION public.can_access_shared_file(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.can_access_shared_file(text) TO anon, authenticated, service_role;
 
 
--- 8. Storage Bucket Setup (shared-files, Private, 50MB Limit)
+-- 9. Storage Bucket Setup (shared-files, Private, 50MB Limit)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('shared-files', 'shared-files', false, 52428800, null)
 ON CONFLICT (id) DO UPDATE 
@@ -197,8 +196,7 @@ SET
   file_size_limit = 52428800;
 
 
--- 9. Storage Object RLS Policies
--- Clean up existing storage policies
+-- 10. Storage Object Policies on storage.objects
 DROP POLICY IF EXISTS "Authenticated users can upload shared files" ON storage.objects;
 DROP POLICY IF EXISTS "Users can update their own shared files" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete their own shared files" ON storage.objects;
@@ -235,7 +233,7 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Storage Policy 4: Allow SELECT (downloads/signed URLs) only if owner OR valid share
+-- Storage Policy 4: Allow download/signed-URL access only for file owners OR active valid shares
 CREATE POLICY "Allow download of valid shared files"
 ON storage.objects
 FOR SELECT
