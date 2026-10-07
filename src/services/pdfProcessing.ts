@@ -1,6 +1,17 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import JSZip from 'jszip';
+import * as pdfjsLib from 'pdfjs-dist';
 import { readFileAsArrayBuffer, fileToCanvas } from '../utils/fileUtils';
+
+// Configure pdfjs worker
+try {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+} catch {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+}
 
 export interface WatermarkPdfOptions {
   text: string;
@@ -496,5 +507,107 @@ FileForge Optical Character Recognition successfully indexed all text layers, ty
       blob: new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' }),
       extractedText: sampleText
     };
+  }
+
+  /**
+   * Convert all pages of a PDF document into high-resolution JPG, PNG, or WebP images
+   */
+  static async convertPdfToImages(
+    file: File,
+    format: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
+    scale: number = 2.0
+  ): Promise<{ blob: Blob; isZip: boolean; count: number; fileName: string }> {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer), disableFontFace: false });
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+
+    const ext = format === 'image/jpeg' ? '.jpg' : format === 'image/png' ? '.png' : '.webp';
+    const baseName = file.name.replace(/\.pdf$/i, '');
+
+    if (numPages === 1) {
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d')!;
+
+      // Crisp white background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      const blob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), format, 0.94));
+      return { blob, isZip: false, count: 1, fileName: `${baseName}_page_1${ext}` };
+    }
+
+    const zip = new JSZip();
+    const folder = zip.folder(`${baseName}_Images`) || zip;
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d')!;
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      const pageBlob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), format, 0.94));
+      folder.file(`${baseName}_page_${pageNum}${ext}`, pageBlob);
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    return { blob: zipBlob, isZip: true, count: numPages, fileName: `${baseName}_pages_images.zip` };
+  }
+
+  /**
+   * Convert multiple uploaded PDF files to JPG, PNG, or WebP images
+   */
+  static async convertMultiplePdfsToImages(
+    files: File[],
+    format: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg'
+  ): Promise<{ blob: Blob; isZip: boolean; count: number; fileName: string }> {
+    if (files.length === 1) {
+      return await this.convertPdfToImages(files[0], format);
+    }
+
+    const zip = new JSZip();
+    let totalCount = 0;
+    const ext = format === 'image/jpeg' ? '.jpg' : format === 'image/png' ? '.png' : '.webp';
+
+    for (const file of files) {
+      try {
+        const baseName = file.name.replace(/\.pdf$/i, '');
+        const folder = zip.folder(baseName) || zip;
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+        const pdf = await loadingTask.promise;
+        totalCount += pdf.numPages;
+
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d')!;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+          const pageBlob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), format, 0.94));
+          folder.file(`${baseName}_page_${p}${ext}`, pageBlob);
+        }
+      } catch (err) {
+        console.warn(`Could not convert PDF ${file.name}:`, err);
+      }
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    return { blob: zipBlob, isZip: true, count: totalCount, fileName: 'FileForge_Converted_PDF_Images.zip' };
   }
 }

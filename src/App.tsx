@@ -11,6 +11,8 @@ import { FAQSection } from './components/FAQSection';
 import { CtaSection } from './components/CtaSection';
 import { Footer } from './components/Footer';
 import { IndividualToolPage } from './components/IndividualToolPage';
+import { FileSharingStudio } from './components/FileSharingStudio';
+import { PublicSharePage } from './components/PublicSharePage';
 import { AuthModal, AuthModalView } from './components/AuthModal';
 import { DashboardModal } from './components/DashboardModal';
 import { SearchModal } from './components/SearchModal';
@@ -57,14 +59,41 @@ function FileForgeContent() {
     } catch {}
   }, [history]);
 
-  // URL hash sync for direct links & protected routes
+  const [publicShareToken, setPublicShareToken] = useState<string | null>(null);
+
+  // URL pathname & hash sync for direct links, public share downloads & tools
   useEffect(() => {
-    const handleHashChange = () => {
+    const handleRouteChange = () => {
       const hash = window.location.hash.replace('#', '');
+      const pathname = window.location.pathname;
       
+      // 1. Check for Public Share Link (/share/:token or #share/:token)
+      if (pathname.startsWith('/share/')) {
+        const token = pathname.replace('/share/', '').split('/')[0].split('?')[0];
+        if (token) {
+          setPublicShareToken(token);
+          return;
+        }
+      } else if (hash.startsWith('share/')) {
+        const token = hash.replace('share/', '').split('/')[0].split('?')[0];
+        if (token) {
+          setPublicShareToken(token);
+          return;
+        }
+      } else {
+        setPublicShareToken(null);
+      }
+
+      // 2. Check for File Sharing Studio (/file-sharing or #file-sharing)
+      if (pathname === '/file-sharing' || hash === 'file-sharing' || hash === 'tool/file-sharing') {
+        setActiveToolId('file-sharing');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       if (hash === 'verify-email') {
         setAuthModalMode('verify_email');
-      } else if (hash === 'reset-password' || hash.includes('type=recovery') || window.location.search.includes('type=recovery') || hash.includes('type=recovery')) {
+      } else if (hash === 'reset-password' || hash.includes('type=recovery') || window.location.search.includes('type=recovery')) {
         setAuthModalMode('reset_password');
       } else if (hash === 'login') {
         setAuthModalMode('login');
@@ -89,18 +118,28 @@ function FileForgeContent() {
       } else if (hash === 'pdf-tools') {
         setSelectedCategory('pdf');
         setActiveToolId(null);
-      } else if (!hash) {
+      } else if (!hash && pathname === '/') {
         setActiveToolId(null);
       }
     };
 
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    handleRouteChange();
+    window.addEventListener('hashchange', handleRouteChange);
+    window.addEventListener('popstate', handleRouteChange);
+    return () => {
+      window.removeEventListener('hashchange', handleRouteChange);
+      window.removeEventListener('popstate', handleRouteChange);
+    };
   }, [user]);
 
   // Open specific tool and update hash
   const handleOpenTool = (toolId: string) => {
+    if (toolId === 'file-sharing') {
+      setActiveToolId('file-sharing');
+      window.location.hash = 'file-sharing';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     const tool = TOOLS_DATA.find((t) => t.id === toolId);
     if (tool) {
       setActiveToolId(tool.id);
@@ -112,6 +151,10 @@ function FileForgeContent() {
   // Back to home
   const handleNavigateHome = () => {
     setActiveToolId(null);
+    setPublicShareToken(null);
+    if (window.location.pathname.startsWith('/share/') || window.location.pathname === '/file-sharing') {
+      window.history.pushState({}, '', '/');
+    }
     window.location.hash = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -219,7 +262,19 @@ function FileForgeContent() {
 
       {/* Main Content Area */}
       <main className="flex-1">
-        {currentActiveTool ? (
+        {publicShareToken ? (
+          /* Standalone Public Share Download Page */
+          <PublicSharePage
+            token={publicShareToken}
+            onNavigateHome={handleNavigateHome}
+          />
+        ) : activeToolId === 'file-sharing' ? (
+          /* Secure File Sharing Studio */
+          <FileSharingStudio
+            onOpenAuth={(mode) => setAuthModalMode(mode)}
+            onNavigateHome={handleNavigateHome}
+          />
+        ) : currentActiveTool ? (
           /* Dedicated Tool Page */
           <IndividualToolPage
             tool={currentActiveTool}

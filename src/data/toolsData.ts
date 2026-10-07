@@ -1,6 +1,29 @@
 import { ToolItem } from '../types';
 
 export const TOOLS_DATA: ToolItem[] = [
+  // ==================== SHARING & VAULT TOOLS ====================
+  {
+    id: 'file-sharing',
+    name: 'Secure File Sharing',
+    slug: 'file-sharing',
+    category: 'pdf',
+    type: 'convert',
+    shortDesc: 'Share any file with encrypted download links, custom expiration, and download limits.',
+    longDesc: 'Upload images, PDFs, archives, or documents to generate self-destructing, tokenized download links with optional 1-download burning, password protection, and QR code access.',
+    iconName: 'Share2',
+    accentColor: 'from-indigo-600 to-blue-500',
+    badge: 'New & Secure',
+    acceptedFormats: ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.zip', '.docx', '.xlsx', '.pptx', '.txt'],
+    outputFormat: 'Encrypted Link',
+    supportsMultiple: false,
+    popular: true,
+    seoTitle: 'Secure File Sharing Online - Tokenized Encrypted Cloud Links | FileForge',
+    seoDesc: 'Share large files securely with custom expiration timers and download limits. Generate QR codes and instant download links with zero data tracking.',
+    seoFaqs: [
+      { q: 'How does link expiration work?', a: 'You can set links to expire in 1 hour, 24 hours, 7 days, or never. Once expired, the file becomes completely inaccessible.' },
+      { q: 'Can I restrict the number of downloads?', a: 'Yes, you can enable self-destructing download limits (e.g. 1 download burn).' }
+    ]
+  },
   // ==================== IMAGE TOOLS (15) ====================
   {
     id: 'image-to-pdf',

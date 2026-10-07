@@ -392,7 +392,12 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
         const res = await ImageProcessor.redactImage(firstFile, boxes);
         outputBlob = res.blob;
         outputName = `${firstFile.name.replace(/\.[^/.]+$/, '')}_redacted.png`;
-      } else if (tool.id === 'image-converter' || tool.id === 'pdf-to-image' || tool.id === 'pdf-to-jpg-png') {
+      } else if (tool.id === 'pdf-to-image' || tool.id === 'pdf-to-jpg-png') {
+        const targetImgFmt = (targetFormat === 'image/avif' ? 'image/webp' : targetFormat) as 'image/jpeg' | 'image/png' | 'image/webp';
+        const pdfImgRes = await PdfProcessor.convertMultiplePdfsToImages(files, targetImgFmt);
+        outputBlob = pdfImgRes.blob;
+        outputName = pdfImgRes.fileName;
+      } else if (tool.id === 'image-converter') {
         const convRes = await ImageProcessor.convertBatch(files, targetFormat);
         outputBlob = convRes.blob;
         outputName = convRes.fileName;
@@ -947,6 +952,35 @@ export const IndividualToolPage: React.FC<IndividualToolPageProps> = ({
                             <span className="text-xs font-mono text-slate-600">{bgCustomColor}</span>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Format Selector for Image Converter & PDF to Image */}
+                    {(tool.id === 'image-converter' || tool.id === 'pdf-to-image' || tool.id === 'pdf-to-jpg-png') && (
+                      <div className="space-y-3">
+                        <label className="block text-xs font-bold text-slate-700">Choose Desired Output Format</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            { fmt: 'image/jpeg' as const, label: 'JPG', desc: 'Best for standard photos' },
+                            { fmt: 'image/png' as const, label: 'PNG', desc: 'Lossless transparency' },
+                            { fmt: 'image/webp' as const, label: 'WebP', desc: 'Ultra small & modern' },
+                            ...(tool.id === 'image-converter' ? [{ fmt: 'image/avif' as const, label: 'AVIF', desc: 'Next-gen compression' }] : [])
+                          ].map((item) => (
+                            <button
+                              key={item.fmt}
+                              type="button"
+                              onClick={() => setTargetFormat(item.fmt)}
+                              className={`p-3.5 rounded-2xl border text-left transition-all ${
+                                targetFormat === item.fmt
+                                  ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-500/20 text-indigo-900 font-bold'
+                                  : 'border-slate-200 hover:bg-slate-50 text-slate-700 font-medium'
+                              }`}
+                            >
+                              <div className="text-xs font-bold">{item.label}</div>
+                              <div className="text-[10px] text-slate-500 mt-0.5">{item.desc}</div>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 

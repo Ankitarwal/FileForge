@@ -82,3 +82,6 @@ export interface HistoryItem {
   processedSize: number;
   status: 'success' | 'failed';
 }
+
+export * from './fileShare';
+

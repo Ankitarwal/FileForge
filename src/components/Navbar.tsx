@@ -11,7 +11,8 @@ import {
   User, 
   Crown,
   LayoutDashboard,
-  ShieldCheck
+  ShieldCheck,
+  Share2
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -164,6 +165,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             <button 
+              onClick={() => onSelectTool('file-sharing')}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-indigo-600 bg-indigo-50/80 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
+            >
+              <Share2 className="w-4 h-4 text-indigo-600" />
+              <span>Share Files</span>
+              <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider">New</span>
+            </button>
+
+            <button 
               onClick={onOpenAbout}
               className="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-100/80 transition-colors"
             >
@@ -262,6 +272,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <RefreshCw className="w-4 h-4" />
               <span>Convert</span>
+            </button>
+            <button 
+              onClick={() => { onSelectTool('file-sharing'); setMobileMenuOpen(false); }}
+              className="col-span-2 flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-indigo-600 text-white text-sm font-bold shadow-sm"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Secure File Sharing (New)</span>
             </button>
           </div>
 
